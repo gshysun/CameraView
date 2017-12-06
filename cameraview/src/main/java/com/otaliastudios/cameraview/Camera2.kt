@@ -58,7 +58,7 @@ import java.util.*
  */
 // TODO: implement background handler thread for all the camera operations
 @TargetApi(21)
-internal class Camera2A(private val mCameraCallbacks: CameraView.CameraCallbacks, private val mActivity: Activity) : CameraController(mCameraCallbacks) {
+internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks, private val mActivity: Activity) : CameraController(mCameraCallbacks) {
 
     private var mCamera2: CameraDevice? = null
     private var mCameraManager: CameraManager? = null
