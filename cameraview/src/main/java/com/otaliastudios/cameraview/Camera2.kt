@@ -15,6 +15,7 @@ import android.media.MediaRecorder
 import android.os.Handler
 import android.os.HandlerThread
 import android.support.annotation.IntDef
+import android.util.DisplayMetrics
 import android.util.Log
 import android.util.Size
 import android.util.SparseIntArray
@@ -25,7 +26,6 @@ import com.otaliastudios.cameraview.Facing.*
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.lang.annotation.RetentionPolicy
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -58,7 +58,7 @@ import java.util.*
  */
 // TODO: implement background handler thread for all the camera operations
 @TargetApi(21)
-internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks, private val mActivity: Activity) : CameraController(mCameraCallbacks) {
+internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks, private val mContext: Context) : CameraController(mCameraCallbacks) {
 
     private var mCamera2: CameraDevice? = null
     private var mCameraManager: CameraManager? = null
@@ -69,6 +69,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
     private var mPicture2Size: Size? = null
     private var mVideoSize: Size? = null
     private var mAfAvailable = false
+    private var mAspectRatio: Float = 1.0f
 
     private var mPreviewRequest: CaptureRequest? = null
     private var mPreviewSession: CameraCaptureSession? = null
@@ -175,6 +176,9 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
         }
     }
 
+    init {
+        mMapper = Mapper.Mapper2()
+    }
     private fun runPrecaptureSequence() {
         try {
             // This is how to tell the camera to trigger.
@@ -189,7 +193,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
     }
 
     private fun captureStillPicture() {
-        if (mActivity == null || mCamera2 == null) return
+        if (mContext == null || mCamera2 == null) return
         try {
 
             // This is the CaptureRequest.Builder that we use to take a picture.
@@ -200,7 +204,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
             captureBuilder?.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
             setFlashMode(captureBuilder)
             val sensorOrientation = mCameraCharacteristics?.get(CameraCharacteristics.SENSOR_ORIENTATION)!!
-            var displayRotation = mActivity.windowManager.defaultDisplay.rotation
+            var displayRotation = (mContext as Activity).windowManager.defaultDisplay.rotation
             if (sensorOrientation == 270) {
                 displayRotation += 2 % 3
             }
@@ -223,30 +227,25 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
         }
      }
 
-    @IntDef(STATE_PREVIEW, STATE_WAITING_LOCK, STATE_WAITING_PRECAPTURE, STATE_WAITING_NON_PRECAPTURE, STATE_PICTURE_TAKEN)
-    @Retention(AnnotationRetention.SOURCE)
-    annotation class CaptureSessionState
-
     @CaptureSessionState
     private var mCaptureSessionState = STATE_PREVIEW
 
     companion object {
-        /** Camera state: Showing camera preview.  */
-        const private val STATE_PREVIEW = 0L
-        /** Camera state: Waiting for the focus to be locked.  */
-        const private val STATE_WAITING_LOCK = 1L
-        /** Camera state: Waiting for the exposure to be precapture state.  */
-        const private val STATE_WAITING_PRECAPTURE = 2L
-        /** Camera state: Waiting for the exposure state to be something other than precapture.  */
-        const private val STATE_WAITING_NON_PRECAPTURE = 3L
-        /** Camera state: Picture was taken.  */
-        const private val STATE_PICTURE_TAKEN = 4L
+        const private val STATE_PREVIEW = 0L //Showing camera preview
+        const private val STATE_WAITING_LOCK = 1L //Waiting for the focus to be locked
+        const private val STATE_WAITING_PRECAPTURE = 2L //Waiting for the exposure to be precapture state
+        const private val STATE_WAITING_NON_PRECAPTURE = 3L //Waiting for the exposure state to be something other than precapture
+        const private val STATE_PICTURE_TAKEN = 4L // Picture was taken.
+        @IntDef(STATE_PREVIEW, STATE_WAITING_LOCK, STATE_WAITING_PRECAPTURE, STATE_WAITING_NON_PRECAPTURE, STATE_PICTURE_TAKEN)
+        @Retention(AnnotationRetention.SOURCE)
+        annotation class CaptureSessionState
+
         private val ORIENTATIONS = SparseIntArray()
 
         const val MAX_PREVIEW_WIDTH = 1920
         const val MAX_PREVIEW_HEIGHT = 1080
         val INTERNAL_FACINGS = SparseIntArray()
-        const val TAG = "Camera2A"
+        const val TAG = "Camera2"
         init {
             INTERNAL_FACINGS.put(BACK.value(), CameraCharacteristics.LENS_FACING_BACK)
             INTERNAL_FACINGS.put(FRONT.value(), CameraCharacteristics.LENS_FACING_FRONT)
@@ -268,8 +267,6 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
         return false
     }
 
-    // TODO: add the permissions for camera2 related parameters
-    @SuppressLint("MissingPermission")
     private fun openCamera(): Boolean {
         if (isCameraAvailable()) {
             Log.w("onStart:", "Camera not available. Should not happen.")
@@ -279,13 +276,13 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
 
             val streamConfigurationMap = mCameraCharacteristics?.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return false
             val largest: android.util.Size = Collections.max(Arrays.asList<android.util.Size>(*streamConfigurationMap?.getOutputSizes(ImageFormat.JPEG)), CompareSizesByArea())
-            val displayRotation = mActivity.windowManager.defaultDisplay.rotation
+            val displayRotation = (mContext as Activity).windowManager.defaultDisplay.rotation
             val sensorOrientation = mCameraCharacteristics?.get(CameraCharacteristics.SENSOR_ORIENTATION)
-            val windowManager = mActivity.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val windowManager = (mContext as Activity).getSystemService(Context.WINDOW_SERVICE) as WindowManager
             val deviceRotation = windowManager.defaultDisplay.rotation
 
             val displaySize = Point()
-            mActivity.windowManager.defaultDisplay.getSize(displaySize)
+            (mContext as Activity).windowManager.defaultDisplay.getSize(displaySize)
             var maxPreviewWidth = displaySize.x
             var maxPreviewHeight = displaySize.y
             if (maxPreviewWidth > MAX_PREVIEW_WIDTH) {
@@ -320,15 +317,9 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
                     }
                 }
             }
-            // time to open the camera \m/
-            try {
-                mCameraManager?.openCamera(mCamera2Id, mCameraDeviceCallback, null)
-            } catch (e: CameraAccessException) {
-                Log.e(TAG, "Could not open camera : " + e.toString())
-                e.printStackTrace()
-            }
+            return true
         }
-        return true
+        return false
     }
 
     private fun startPreviewSession() {
@@ -344,18 +335,18 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
         }
         val surfaces = ArrayList<Surface>()
         surfaces.add(mPreview.surface)
-        if (mIsCapturingImage) {
+//        if (mIsCapturingImage) {
             mPreviewRequestBuilder = mCamera2?.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
             mPreviewRequestBuilder?.addTarget(mPreview.surface)
             mImageReader?.surface?.let { surfaces.add(it) }
             // for the actual picture capture you do it in captureStillPicture
-        } else {
-            mPreviewRequestBuilder = mCamera2?.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
-            mPreviewRequestBuilder?.addTarget(mPreview.surface)
-            val recorderSurface = mMediaRecorder.surface
-            surfaces.add(recorderSurface)
-            mPreviewRequestBuilder?.addTarget(recorderSurface)
-        }
+//        } else {
+//            mPreviewRequestBuilder = mCamera2?.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
+//            mPreviewRequestBuilder?.addTarget(mPreview.surface)
+//            val recorderSurface = mMediaRecorder.surface
+//            surfaces.add(recorderSurface)
+//            mPreviewRequestBuilder?.addTarget(recorderSurface)
+//        }
         mCamera2?.createCaptureSession(surfaces, mSessionCallback, null)
 
     }
@@ -368,16 +359,16 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
     private fun updatePreview() {
         if (mCamera2 == null) return
         try {
-            if (mIsCapturingImage) {
+//            if (mIsCapturingImage) {
                 mPreviewRequestBuilder?.set(CaptureRequest.CONTROL_AF_MODE,  CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
                 setFlashMode(mPreviewRequestBuilder)
                 mPreviewRequest = mPreviewRequestBuilder?.build()
                 mPreviewSession?.setRepeatingRequest(mPreviewRequest, mCaptureCallback, null)
-            } else {
-                mPreviewRequestBuilder?.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
-                mPreviewRequest = mPreviewRequestBuilder?.build()
-                mPreviewSession?.setRepeatingRequest(mPreviewRequest, null, null)
-            }
+//            } else {
+//                mPreviewRequestBuilder?.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
+//                mPreviewRequest = mPreviewRequestBuilder?.build()
+//                mPreviewSession?.setRepeatingRequest(mPreviewRequest, null, null)
+//            }
         } catch (e: CameraException) {
             e.printStackTrace()
         }
@@ -447,7 +438,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
 
     private fun establishCameraIdAndCharacteristics(): Boolean {
         val internalFacing = mMapper.map<Int>(mFacing)
-        mCameraManager = mActivity.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        mCameraManager = mContext.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         // TODO: should you use a open/close semaphore?
         mCameraManager?.let {
             try {
@@ -503,11 +494,11 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
     }
 
     private fun getOutputMediaFile(): File {
-        return makeTempFile(mActivity, null, "VID_", ".mp4")
+        return makeTempFile(mContext, null, "VID_", ".mp4")
     }
 
     private fun getOutputPictureFile(): File {
-        return makeTempFile(mActivity, null, "IMG_", ".jpg")
+        return makeTempFile(mContext, null, "IMG_", ".jpg")
     }
 
     private fun makeTempFile(
@@ -553,7 +544,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
     private fun chooseVideoSize(choices: Array<Size>, maxWidth: Int): Size {
         choices.forEach {
             size ->
-                if (size.width == size.height * 4 / 3 && size.width <= maxWidth) {
+                if (size.width == (size.height * mAspectRatio).toInt() && size.width <= maxWidth) {
                     return size
                 }
         }
@@ -567,29 +558,67 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
         mMediaRecorder = null
     }
 
-
-    override fun onSurfaceAvailable() {
-
+    private fun schedule(task: Task<Void>?, ensureAvailable: Boolean, action: Runnable) {
+        mHandler.post {
+            if (ensureAvailable && !isCameraAvailable()) {
+                task?.end(null)
+            } else {
+                action.run()
+                task?.end(null)
+            }
+        }
     }
 
-    override fun onSurfaceChanged() {
 
+    // TODO: add the permissions for camera2 related parameters
+    @SuppressLint("MissingPermission")
+    override fun onSurfaceAvailable() {
+        Log.i(TAG, "onSurfaceAvailable: Size is ${mPreview?.surfaceSize}")
+        try {
+            // this will trigger the sequence of events leading to binding of the surface
+            // to the camera device, so good to open it here as opposed to in the openCamera()
+            mCameraManager?.openCamera(mCamera2Id, mCameraDeviceCallback, null)
+        } catch (e: CameraAccessException) {
+            Log.e(TAG, "Could not open camera : " + e.toString())
+            e.printStackTrace()
+        }
+    }
+
+    // Preview surface did change its size. Compute a new preview size.
+    // This requires stopping and restarting the preview.
+    override fun onSurfaceChanged() {
+        Log.d(TAG, "onSurfaceChanged")
     }
 
     override fun onStart() {
-
+        Log.d(TAG, "onStart")
+        var metrics: DisplayMetrics = DisplayMetrics()
+        (mContext as Activity).windowManager.defaultDisplay.getMetrics(metrics)
+        mAspectRatio = metrics.widthPixels.toFloat()/metrics.heightPixels.toFloat()
+        if(!openCamera()) Log.d(TAG, "openCamera failed!")
+        mCameraOptions = CameraOptions(mCameraCharacteristics)
+        //mExtraProperties = ExtraProperties(mCameraCharacteristics)
     }
 
     override fun onStop() {
-
+        Log.d(TAG, "onStop")
+        closeCamera()
     }
 
     override fun setSessionType(sessionType: SessionType) {
-
+        if (sessionType != mSessionType) {
+            mSessionType = sessionType
+            schedule(null, true, Runnable { restart() })
+        }
     }
 
     override fun setFacing(facing: Facing) {
-
+        if (facing != mFacing) {
+            mFacing = facing
+            schedule(null, true, Runnable {
+                    restart()
+            })
+        }
     }
 
     override fun setZoom(zoom: Float, points: Array<PointF>, notify: Boolean) {
@@ -601,7 +630,13 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
     }
 
     override fun setFlash(flash: Flash) {
-
+        setFlashMode(mPreviewRequestBuilder)
+        mPreviewRequest = mPreviewRequestBuilder?.build()
+        try {
+            mPreviewSession?.setRepeatingRequest(mPreviewRequest, mCaptureCallback, null)
+        } catch (t: Throwable) {
+            t.printStackTrace()
+        }
     }
 
     override fun setWhiteBalance(whiteBalance: WhiteBalance) {
@@ -613,7 +648,12 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
     }
 
     override fun setAudio(audio: Audio) {
-
+        if (mAudio != audio) {
+            if (mIsCapturingVideo) {
+                Log.w(TAG, "Audio setting was changed while recording. Changes will take place starting from next video")
+            }
+            mAudio = audio
+        }
     }
 
     override fun setLocation(location: Location) {

@@ -148,7 +148,7 @@ public class CameraView extends FrameLayout {
 
         // Components
         mCameraCallbacks = new Callbacks();
-        mCameraController = instantiateCameraController(mCameraCallbacks);
+        mCameraController = instantiateCameraController(mCameraCallbacks, context);
         mUiHandler = new Handler(Looper.getMainLooper());
         mWorkerHandler = WorkerHandler.get("CameraViewWorker");
         mFrameProcessorsHandler = WorkerHandler.get("FrameProcessorsWorker");
@@ -191,8 +191,9 @@ public class CameraView extends FrameLayout {
         }
     }
 
-    protected CameraController instantiateCameraController(CameraCallbacks callbacks) {
-        return new Camera1(callbacks);
+    protected CameraController instantiateCameraController(CameraCallbacks callbacks, Context context) {
+        //TODO: filter it by api level
+        return new Camera2(callbacks, context);
     }
 
     protected CameraPreview instantiatePreview(Context context, ViewGroup container) {

@@ -1,6 +1,7 @@
 package com.otaliastudios.cameraview;
 
 import android.hardware.Camera;
+import android.hardware.camera2.CameraCharacteristics;
 import android.os.Build;
 
 import java.util.HashMap;
@@ -94,7 +95,12 @@ abstract class Mapper {
     }
 
     static class Mapper2 extends Mapper {
+        private static final HashMap<Facing, Integer> FACING = new HashMap<>();
 
+        static {
+            FACING.put(Facing.BACK, CameraCharacteristics.LENS_FACING_BACK);
+            FACING.put(Facing.FRONT, CameraCharacteristics.LENS_FACING_FRONT);
+        }
         @Override
         <T> T map(WhiteBalance whiteBalance) {
             return null;
@@ -117,7 +123,7 @@ abstract class Mapper {
 
         @Override
         <T> T map(Facing facing) {
-            return null;
+            return (T) FACING.get(facing);
         }
 
         @Override
