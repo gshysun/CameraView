@@ -84,7 +84,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
         }
 
         override fun onClosed(camera: CameraDevice) {
-            //mCallback.onCameraClosed();
+            Log.d(TAG, "mCameraDeviceCallback - onClosed")
             camera.close()
             mCamera2 = null
         }
@@ -216,7 +216,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
                         session: CameraCaptureSession,
                         request: CaptureRequest,
                         result: TotalCaptureResult) {
-                    Log.d("stillshot", "onCaptureCompleted")
+                    Log.d(TAG, "stillshot - onCaptureCompleted")
                     unlockFocus()
                 }
             }
@@ -259,17 +259,29 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
 
     private fun isCameraAvailable(): Boolean {
         when (mState) {
-            CameraController.STATE_STOPPED -> return false
-            CameraController.STATE_STOPPING -> return false
-            CameraController.STATE_STARTED -> return true
-            CameraController.STATE_STARTING -> return mCameraManager != null
+            CameraController.STATE_STOPPED -> {
+                Log.d(TAG, "Returning false - STATE_STOPPED")
+                return false
+            }
+            CameraController.STATE_STOPPING -> {
+                Log.d(TAG, "Returning false - STATE_STOPPING")
+                return false
+            }
+            CameraController.STATE_STARTED -> {
+                Log.d(TAG, "Returning for - STATE_STARTED")
+                return mCameraManager != null
+            }
+            CameraController.STATE_STARTING -> {
+                Log.d(TAG, "Returning for - STATE_STARTING")
+                return true
+            }
         }
+        Log.d(TAG, "Returning false")
         return false
     }
 
     private fun openCamera(): Boolean {
         if (isCameraAvailable()) {
-            Log.w("onStart:", "Camera not available. Should not happen.")
             onStop()
         }
         if (establishCameraIdAndCharacteristics()) {
@@ -317,6 +329,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
                     }
                 }
             }
+            Log.d(TAG, "successfully setup camera")
             return true
         }
         return false
@@ -489,7 +502,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
 
                         }
                     }
-                    Log.d("stillshot", "picture saved to disk - jpeg, size: " + bytes.size)
+                    Log.d(TAG, "stillshot - picture saved to disk - jpeg, size: " + bytes.size)
                 }, null)
     }
 
@@ -552,8 +565,12 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
     }
 
     private fun closeCamera() {
+        mPreviewSession?.close()
+        mPreviewSession = null
         mCamera2?.close()
         mCamera2 = null
+        mImageReader?.close()
+        mImageReader = null
         mMediaRecorder?.release()
         mMediaRecorder = null
     }
@@ -608,15 +625,21 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
     override fun setSessionType(sessionType: SessionType) {
         if (sessionType != mSessionType) {
             mSessionType = sessionType
-            schedule(null, true, Runnable { restart() })
+            closeCamera()
+            schedule(null, true, Runnable {
+                openCamera()
+                onSurfaceAvailable()
+            })
         }
     }
 
     override fun setFacing(facing: Facing) {
         if (facing != mFacing) {
             mFacing = facing
+            closeCamera()
             schedule(null, true, Runnable {
-                    restart()
+                    openCamera()
+                    onSurfaceAvailable()
             })
         }
     }
