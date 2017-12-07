@@ -194,6 +194,7 @@ public class CameraView extends FrameLayout {
     protected CameraController instantiateCameraController(CameraCallbacks callbacks, Context context) {
         //TODO: filter it by api level
         return new Camera2(callbacks, context);
+        //return new Camera1(callbacks);
     }
 
     protected CameraPreview instantiatePreview(Context context, ViewGroup container) {

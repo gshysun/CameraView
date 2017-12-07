@@ -58,7 +58,7 @@ import java.util.*
  */
 // TODO: implement background handler thread for all the camera operations
 @TargetApi(21)
-internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks, private val mContext: Context) : CameraController(mCameraCallbacks) {
+internal class Camera2(cameraCallbacks: CameraView.CameraCallbacks, private val mContext: Context) : CameraController(cameraCallbacks) {
 
     private var mCamera2: CameraDevice? = null
     private var mCameraManager: CameraManager? = null
@@ -70,6 +70,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
     private var mVideoSize: Size? = null
     private var mAfAvailable = false
     private var mAspectRatio: Float = 1.0f
+    private var mSurfaceReady = false
 
     private var mPreviewRequest: CaptureRequest? = null
     private var mPreviewSession: CameraCaptureSession? = null
@@ -469,7 +470,6 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
                 e.printStackTrace()
             }
         }
-
         // no front and back facing camera found
         return false
     }
@@ -482,6 +482,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
                     val buffer = image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining())
                     buffer.get(bytes)
+                    mCameraCallbacks.processImage(bytes, true, false)
 
                     val outputPic = getOutputPictureFile()
 
@@ -502,7 +503,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
 
                         }
                     }
-                    Log.d(TAG, "stillshot - picture saved to disk - jpeg, size: " + bytes.size)
+                    Log.d(TAG, "stillshot - picture saved to disk - jpeg, size: ${bytes.size} (${outputPic.absoluteFile})")
                 }, null)
     }
 
@@ -519,7 +520,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
         var saveDir = saveDir
         if (saveDir == null) saveDir = context.externalCacheDir?.absolutePath
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val dir = File(saveDir!!)
+        val dir = File(saveDir)
         dir.mkdirs()
         return File(dir, prefix + timeStamp + extension)
     }
@@ -586,11 +587,9 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
         }
     }
 
-
     // TODO: add the permissions for camera2 related parameters
     @SuppressLint("MissingPermission")
-    override fun onSurfaceAvailable() {
-        Log.i(TAG, "onSurfaceAvailable: Size is ${mPreview?.surfaceSize}")
+    private fun startCamera() {
         try {
             // this will trigger the sequence of events leading to binding of the surface
             // to the camera device, so good to open it here as opposed to in the openCamera()
@@ -599,12 +598,21 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
             Log.e(TAG, "Could not open camera : " + e.toString())
             e.printStackTrace()
         }
+        mPictureSize = computePictureSize()
+
+    }
+
+    override fun onSurfaceAvailable() {
+        Log.i(TAG, "onSurfaceAvailable: Size is ${mPreview?.surfaceSize}")
+        startCamera()
+        mSurfaceReady = true
     }
 
     // Preview surface did change its size. Compute a new preview size.
     // This requires stopping and restarting the preview.
     override fun onSurfaceChanged() {
         Log.d(TAG, "onSurfaceChanged")
+        startCamera()
     }
 
     override fun onStart() {
@@ -615,6 +623,7 @@ internal class Camera2(private val mCameraCallbacks: CameraView.CameraCallbacks,
         if(!openCamera()) Log.d(TAG, "openCamera failed!")
         mCameraOptions = CameraOptions(mCameraCharacteristics)
         //mExtraProperties = ExtraProperties(mCameraCharacteristics)
+        if (mSurfaceReady) startCamera()
     }
 
     override fun onStop() {

@@ -2,6 +2,7 @@ package com.otaliastudios.cameraview;
 
 
 import android.annotation.TargetApi;
+import android.graphics.ImageFormat;
 import android.hardware.Camera;
 import android.hardware.camera2.CameraCharacteristics;
 import android.support.annotation.NonNull;
@@ -99,7 +100,13 @@ public class CameraOptions {
 
     // Camera2 constructor.
     @TargetApi(21)
-    CameraOptions(CameraCharacteristics params) {}
+    CameraOptions(CameraCharacteristics params) {
+        for (android.util.Size size:
+                params.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP).getOutputSizes(ImageFormat.JPEG)) {
+            supportedPictureSizes.add(new Size(size.getWidth(), size.getHeight()));
+            supportedPictureAspectRatio.add(AspectRatio.of(size.getWidth(), size.getHeight()));
+        }
+    }
 
 
     /**
